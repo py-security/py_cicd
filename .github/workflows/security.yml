@@ -79,10 +79,31 @@ jobs:
   dast-owasp-zap:
     name: DAST (OWASP ZAP Baseline)
     runs-on: ubuntu-latest
+    needs: test-and-lint   # erst testen/linten, dann DAST (optional)
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build app Docker image
+        run: |
+          docker build -t my-fastapi-app:${{ github.sha }} .
+
+      - name: Run app container
+        run: |
+          docker run -d --name my-fastapi-app -p 8000:8000 my-fastapi-app:${{ github.sha }}
+          echo "Waiting for app to be ready..."
+          for i in {1..10}; do
+            if curl -sSf http://localhost:8000/ > /dev/null; then
+              echo "App is up!"
+              break
+            fi
+            sleep 3
+          done
+
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.15.0
         with:
-          # Für einen echten Scan hier deine Test-/Staging-URL eintragen
-          target: "https://example.com"
+          target: "http://localhost:8000"
+          allow_issue_writing: false      # kein GitHub-Issue anlegen
+          fail_action: false              # Build nicht sofort failen bei Warnungen
